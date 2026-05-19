@@ -1,27 +1,23 @@
+"use client";
+
+import { Message } from "@/types/chat";
 import ChatMessage from "./ChatMessage";
 
-const messages = [
-  {
-    sender: "ai",
-    message: "Hey 👋 Where are we traveling today?",
-  },
-];
+type Props = {
+  messages: Message[];
+};
 
-export default function ChatWindow() {
+export default function ChatWindow({ messages }: Props) {
   return (
     <div
       className="
-      flex-1
-      overflow-y-auto
-      p-6
-      "
+flex-1
+overflow-y-auto
+p-6
+"
     >
-      {messages.map((msg, index) => (
-        <ChatMessage
-          key={index}
-          message={msg.message}
-          sender={msg.sender as "user" | "ai"}
-        />
+      {messages.map((msg) => (
+        <ChatMessage key={msg.id} message={msg.text} sender={msg.sender} />
       ))}
     </div>
   );

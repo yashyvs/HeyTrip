@@ -1,22 +1,40 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 import ChatInput from "@/components/chat/ChatInput";
 import ChatWindow from "@/components/chat/ChatWindow";
 
 import { Message } from "@/types/chat";
 
-import { useState } from "react";
+import { socket } from "@/services/socket";
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
-
       text: "Hey 👋 Where are we traveling today?",
-
       sender: "ai",
     },
   ]);
+
+  useEffect(() => {
+    socket.on("ai_status", (data) => {
+      const msg = {
+        id: Date.now(),
+
+        text: data.message,
+
+        sender: "ai" as const,
+      };
+
+      setMessages((prev) => [...prev, msg]);
+    });
+
+    return () => {
+      socket.off("ai_status");
+    };
+  }, []);
 
   const sendMessage = (text: string) => {
     const userMessage = {
@@ -29,17 +47,7 @@ export default function Home() {
 
     setMessages((prev) => [...prev, userMessage]);
 
-    setTimeout(() => {
-      const aiReply = {
-        id: Date.now() + 1,
-
-        text: "Interesting 👀 Tell me more.",
-
-        sender: "ai" as const,
-      };
-
-      setMessages((prev) => [...prev, aiReply]);
-    }, 1000);
+    socket.emit("user_message", { text });
   };
 
   return (

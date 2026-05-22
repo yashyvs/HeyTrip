@@ -1,6 +1,9 @@
-import asyncio
 import socketio
 from fastapi import FastAPI
+
+from graph.workflow import graph
+from memory.session_store import sessions
+
 
 sio = socketio.AsyncServer(
     async_mode="asgi",
@@ -14,35 +17,48 @@ socket_app = socketio.ASGIApp(
     app
 )
 
+
 @sio.event
 async def connect(sid, environ):
-    print("Connected:", sid)
+
+    sessions[sid] = {
+        "messages": []
+    }
+
+    print(f"Connected: {sid}")
+
+
+@sio.event
+async def disconnect(sid):
+
+    sessions.pop(sid, None)
+
+    print(f"Disconnected: {sid}")
 
 
 @sio.event
 async def user_message(sid, data):
 
-    steps = [
+    text = data["text"]
 
-        "🔍 Understanding trip...",
+    sessions[sid]["messages"].append(
+        text
+    )
 
-        "✈️ Searching transport...",
+    result = graph.invoke(
+        sessions[sid]
+    )
 
-        "🏨 Finding hotels...",
+    sessions[sid].update(
+        result
+    )
 
-        "🎯 Looking for activities...",
+    ai_reply = result["messages"][-1]
 
-        "🧠 Creating itinerary...",
-
-        "✅ Trip ready"
-    ]
-
-    for step in steps:
-
-        await sio.emit(
-            "ai_status",
-            {"message": step},
-            room=sid
-        )
-
-        await asyncio.sleep(2)
+    await sio.emit(
+        "ai_status",
+        {
+            "message": ai_reply
+        },
+        room=sid
+    )

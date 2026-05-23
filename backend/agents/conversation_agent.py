@@ -1,107 +1,93 @@
 import os
 
 from dotenv import load_dotenv
-from langchain_huggingface import (
-    ChatHuggingFace,
-    HuggingFaceEndpoint
-)
+from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
 
 load_dotenv()
 
 llm = HuggingFaceEndpoint(
     repo_id="Qwen/Qwen2.5-72B-Instruct",
     task="text-generation",
-    huggingfacehub_api_token=os.getenv(
-        "HUGGINGFACEHUB_API_TOKEN"
-    ),
+    huggingfacehub_api_token=os.getenv("HUGGINGFACEHUB_API_TOKEN"),
     max_new_tokens=140,
-    temperature=0.95
+    temperature=0.95,
 )
 
-model = ChatHuggingFace(
-    llm=llm
-)
+model = ChatHuggingFace(llm=llm)
 
 
 def conversation_agent(state):
 
-    history = "\n".join(
-        state["messages"][-8:]
-    )
+    raw = state["messages"][-10:]
+    history = "\n".join(raw)
 
-    prompt = f"""
-You are HeyTrip.
+    destination = state.get("destination")
+    days = state.get("days")
+    people = state.get("people")
+    budget = state.get("budget")
 
-You are NOT a chatbot.
+    known = []
+    if destination: known.append(f"Destination: {destination}")
+    if days:        known.append(f"Days: {days}")
+    if people:      known.append(f"People: {people}")
+    if budget:      known.append(f"Budget: ₹{budget}")
+    known_str = "\n".join(known) if known else "Nothing confirmed yet."
 
-You are a real travel consultant and companion.
+    # Check what's missing — only destination and days are required to plan
+    missing = []
+    if not destination: missing.append("destination (where they want to go)")
+    if not days:        missing.append("number of days for the trip")
+    if not budget:      missing.append("approximate budget")
 
-Talk like a human.
+    if missing:
+        next_to_ask = missing[0]
+        guidance = (
+            f"You still need: {next_to_ask}. "
+            f"Ask for it naturally — like a friend, not a form."
+        )
+    else:
+        # ← KEY FIX: tell the LLM to make a statement, NOT ask a question
+        # A question causes the user to say "yes" which loops back here
+        guidance = (
+            "You have everything you need to plan the trip! "
+            "Make an enthusiastic statement like 'Let me put together your itinerary!' "
+            "or 'I have everything I need, putting your plan together now!' "
+            "Do NOT ask a question. Do NOT say 'shall we' or 'ready to'. "
+            "Just confirm you're making the plan."
+        )
 
-Conversation history:
+    prompt = f"""You are HeyTrip, a friendly AI travel companion — NOT a customer support bot.
 
+Talk like a fun, knowledgeable friend who loves travel.
+
+--- Conversation so far ---
 {history}
+--- End ---
 
+What we know:
+{known_str}
 
-Known information:
+Your task for this reply:
+{guidance}
 
-Destination:
-{state.get("destination")}
+Rules:
+- Keep it under 2 sentences
+- Sound warm and human
+- Never ask more than one question per reply
 
-Days:
-{state.get("days")}
+Write only your next reply:"""
 
-People:
-{state.get("people")}
-
-Budget:
-{state.get("budget")}
-
-
-Behavior:
-
-- React naturally
-- Acknowledge changes
-- Give suggestions occasionally
-- Infer things from conversation
-- Avoid interview style
-- Don't ask a question every reply
-- Sometimes continue naturally
-- Ask for budget only if needed
-- Avoid repeated questions
-- Sound like a travel buddy
-- Keep response under 2 lines
-- Never sound like customer support
-
-
-Bad:
-
-How many people?
-What activities?
-What budget?
-
-
-Good:
-
-"Delhi for 3 days actually gives enough time to mix old Delhi with Gurgaon cafés 😄"
-
-or
-
-"Gurgaon + historical places is an interesting combo."
-
-
-Generate only the next reply:
-"""
-
-    response = model.invoke(
-        prompt
-    )
+    try:
+        response = model.invoke(prompt)
+        reply = response.content.strip()
+    except Exception as e:
+        print(f"Conversation agent error: {e}")
+        reply = "That sounds amazing! Tell me more about what you have in mind."
 
     return {
         **state,
-
-        "messages":[
+        "messages": [
             *state["messages"],
-            response.content.strip()
-        ]
+            f"AI: {reply}",
+        ],
     }

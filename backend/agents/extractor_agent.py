@@ -20,8 +20,7 @@ llm = HuggingFaceEndpoint(
 
     task="text-generation",
 
-    huggingfacehub_api_token=
-    os.getenv(
+    huggingfacehub_api_token=os.getenv(
         "HUGGINGFACEHUB_API_TOKEN"
     ),
 
@@ -42,7 +41,7 @@ def extractor_agent(state):
     prompt = f"""
 Extract travel information.
 
-Return ONLY valid JSON.
+Return ONLY JSON.
 
 Allowed fields:
 
@@ -67,7 +66,7 @@ Trip for 5 days
 
 Output:
 {{
-   "days":5
+    "days":5
 }}
 
 Message:
@@ -87,11 +86,20 @@ Message:
 
     try:
 
+        # remove markdown wrappers
+        cleaned = re.sub(
+            r"```json|```",
+            "",
+            raw
+        ).strip()
+
+
         match = re.search(
             r"\{.*\}",
-            raw,
+            cleaned,
             re.DOTALL
         )
+
 
         if match:
 
@@ -99,13 +107,14 @@ Message:
                 match.group()
             )
 
+
             validated = TripInfo(
                 **data
             )
 
+
             extracted = (
-                validated
-                .model_dump(
+                validated.model_dump(
                     exclude_none=True
                 )
             )
@@ -115,6 +124,10 @@ Message:
         ValidationError,
         Exception
     ) as e:
+
+        print(
+            "\nERROR:"
+        )
 
         print(e)
 
@@ -128,6 +141,14 @@ Message:
         extracted
     )
 
-    print(updated)
+
+    print(
+        "\nSTATE:"
+    )
+
+    print(
+        updated
+    )
+
 
     return updated

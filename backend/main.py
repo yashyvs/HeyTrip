@@ -5,21 +5,20 @@ from graph.workflow import graph
 from memory.session_store import sessions
 
 
-sio = socketio.AsyncServer(
-    async_mode="asgi",
-    cors_allowed_origins="*",
-)
-
+sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
 app = FastAPI()
 socket_app = socketio.ASGIApp(sio, app)
 
 
 @sio.event
 async def connect(sid, environ):
-    sessions[sid] = {"messages": []}
+    sessions[sid] = {"messages": [], "pending_options": []}
     print(f"Connected: {sid}")
-    # ← Send welcome message from server instead of hardcoding it in the frontend
-    await sio.emit("ai_status", {"message": "Hey 👋 Where are we traveling today?"}, room=sid)
+    await sio.emit(
+        "ai_status",
+        {"message": "Hey 👋 Where are we traveling today?", "options": []},
+        room=sid,
+    )
 
 
 @sio.event
@@ -35,17 +34,20 @@ async def user_message(sid, data):
     if not text:
         return
 
-    # ← Store with speaker label so the LLM knows who said what
     sessions[sid]["messages"].append(f"User: {text}")
+    # Clear previous options so they don't persist in state
+    sessions[sid]["pending_options"] = []
 
     try:
         result = graph.invoke(sessions[sid])
         sessions[sid].update(result)
 
         last_msg = result["messages"][-1]
-        display_msg = last_msg.removeprefix("AI: ")  # strip prefix before sending to frontend
+        display_msg = last_msg.removeprefix("AI: ")
 
-        # ← If itinerary was just generated, emit a richer event with the JSON
+        # ← Read options from the agent result
+        options = result.get("pending_options", [])
+
         if result.get("itinerary") and result.get("itinerary_done"):
             await sio.emit(
                 "itinerary_ready",
@@ -58,15 +60,17 @@ async def user_message(sid, data):
         else:
             await sio.emit(
                 "ai_status",
-                {"message": display_msg},
+                {
+                    "message": display_msg,
+                    "options": options,   # ← chips sent here
+                },
                 room=sid,
             )
 
     except Exception as e:
-        # ← Catch errors so the frontend doesn't hang forever
         print(f"Graph error: {e}")
         await sio.emit(
             "ai_status",
-            {"message": "Something went wrong on my end. Try again!"},
+            {"message": "Something went wrong! Try again.", "options": []},
             room=sid,
         )

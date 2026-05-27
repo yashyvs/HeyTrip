@@ -7,16 +7,22 @@ import { Message, ItineraryData } from "@/types/chat";
 import { socket } from "@/services/socket";
 
 export default function Home() {
-  // ← Empty array — welcome message comes from the backend on connect
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
 
   useEffect(() => {
-    socket.on("ai_status", (data: { message: string }) => {
+    // ← Now reads options from the event
+    socket.on("ai_status", (data: { message: string; options?: string[] }) => {
       setIsTyping(false);
       setMessages((prev) => [
         ...prev,
-        { id: Date.now(), text: data.message, sender: "ai" },
+        {
+          id: Date.now(),
+          text: data.message,
+          sender: "ai",
+          options:
+            data.options && data.options.length > 0 ? data.options : undefined,
+        },
       ]);
     });
 

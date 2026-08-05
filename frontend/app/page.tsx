@@ -11,7 +11,6 @@ export default function Home() {
   const [isTyping, setIsTyping] = useState(false);
 
   useEffect(() => {
-    // ← Now reads options from the event
     socket.on("ai_status", (data: { message: string; options?: string[] }) => {
       setIsTyping(false);
       setMessages((prev) => [
@@ -54,6 +53,24 @@ export default function Home() {
     setMessages((prev) => [...prev, { id: Date.now(), text, sender: "user" }]);
     setIsTyping(true);
     socket.emit("user_message", { text });
+
+    // Show a hint after 12s if LLM is slow (cold start)
+    const slowHint = setTimeout(() => {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          text: "⏳ Still thinking... the AI model is warming up. This only happens once — should be ready in under a minute!",
+          sender: "ai",
+        },
+      ]);
+      setIsTyping(false);
+    }, 12000);
+
+    // Cancel hint if response arrives before 12s
+    const cancel = () => clearTimeout(slowHint);
+    socket.once("ai_status", cancel);
+    socket.once("itinerary_ready", cancel);
   };
 
   return (

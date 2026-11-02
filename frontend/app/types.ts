@@ -16,3 +16,8 @@ export interface PlanTripResponse {
   query: string;
   response: string;
 }
+
+export interface HistoryResponse {
+  thread_id: string;
+  messages: ChatMessage[];
+}
